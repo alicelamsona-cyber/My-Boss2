@@ -35,12 +35,11 @@
         }
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
+          to { opacity: 1; opacity: 1; transform: translateY(0); }
         }
         .animate-fadeIn {
           animation: fadeIn 0.4s ease-out forwards;
         }
-        /* 隱藏捲軸但保持滾動功能 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
@@ -87,7 +86,7 @@
         const fmt = (v) => new Intl.NumberFormat('zh-HK', { style: 'currency', currency: 'HKD', maximumFractionDigits: 0 }).format(v);
 
         // --- 2. 組件：首頁 (Home) ---
-        const Home = ({ quote, totalAssets, totalAnnualExpenses, goal, userName }) => {
+        const Home = ({ quote, totalAssets, totalAnnualExpenses, goal, userName, goldPrice }) => {
             const percentage = Math.min(Math.round((totalAssets / goal) * 100), 100);
             return (
                 <div className="flex flex-col gap-8 animate-fadeIn">
@@ -117,13 +116,14 @@
                         </div>
                     </section>
 
-                    <div className="p-6 bg-zinc-900/50 rounded-2xl gold-border flex justify-between items-center">
-                        <div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-zinc-900/50 rounded-2xl gold-border">
                             <p className="text-gray-500 text-[10px] uppercase font-bold tracking-widest mb-1">今年累計支出</p>
-                            <p className="text-2xl font-bold text-white">{fmt(totalAnnualExpenses)}</p>
+                            <p className="text-xl font-bold text-white">{fmt(totalAnnualExpenses)}</p>
                         </div>
-                        <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center">
-                            <svg width="20" height="20" fill="none" stroke="#d4af37" strokeWidth="2"><path d="M4 10h16M4 14h16M12 18h8M12 6h8"/><rect width="16" height="20" x="4" y="2" rx="2"/></svg>
+                        <div className="p-4 bg-zinc-900/50 rounded-2xl gold-border">
+                            <p className="text-gray-500 text-[10px] uppercase font-bold tracking-widest mb-1">現價金價/克</p>
+                            <p className="text-xl font-bold gold-text">HKD {Math.round(goldPrice)}</p>
                         </div>
                     </div>
                 </div>
@@ -131,14 +131,40 @@
         };
 
         // --- 3. 組件：資產 (Assets) ---
-        const Assets = ({ assets, onAdd, onUpdate, onDelete }) => {
+        const Assets = ({ assets, onAdd, onUpdate, onDelete, goldPrice }) => {
             const [showAdd, setShowAdd] = useState(false);
-            const [editingId, setEditingId] = useState(null);
-            const [editVal, setEditVal] = useState('');
+            const [editingAsset, setEditingAsset] = useState(null);
             
             const [name, setName] = useState('');
             const [val, setVal] = useState('');
+            const [weight, setWeight] = useState(''); // For Gold
             const [type, setType] = useState(AssetType.CASH);
+            const [rate, setRate] = useState(''); // For Bonds/Savings
+            const [maturity, setMaturity] = useState(''); // For Bonds/Savings
+
+            const handleUpdateSubmit = (e) => {
+                e.preventDefault();
+                if (!editingAsset) return;
+                
+                const updateData = {
+                    value: type === AssetType.GOLD ? (parseFloat(weight) * goldPrice) : parseFloat(val),
+                    weight: type === AssetType.GOLD ? parseFloat(weight) : undefined,
+                    interestRate: (type === AssetType.US_BONDS || type === AssetType.SAVINGS) ? parseFloat(rate) : undefined,
+                    maturityDate: (type === AssetType.US_BONDS || type === AssetType.SAVINGS) ? maturity : undefined
+                };
+                onUpdate(editingAsset.id, updateData);
+                setEditingAsset(null);
+            };
+
+            const startEditing = (a) => {
+                setEditingAsset(a);
+                setType(a.type);
+                setName(a.name);
+                setVal(a.value || '');
+                setWeight(a.weight || '');
+                setRate(a.interestRate || '');
+                setMaturity(a.maturityDate || '');
+            };
 
             return (
                 <div className="flex flex-col gap-6 pb-10 animate-fadeIn">
@@ -153,55 +179,97 @@
                         {assets.length === 0 ? (
                             <div className="text-center py-20 text-gray-800 italic">庫存為零。</div>
                         ) : (
-                            assets.map(a => (
-                                <div key={a.id} className="p-5 bg-zinc-900/40 gold-border rounded-2xl flex justify-between items-center group">
-                                    <div className="flex-1 cursor-pointer" onClick={() => { setEditingId(a.id); setEditVal(a.value); }}>
-                                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">{a.type}</p>
-                                        <h3 className="text-lg text-white font-medium">{a.name}</h3>
+                            assets.map(a => {
+                                const displayValue = a.type === AssetType.GOLD ? (a.weight * goldPrice) : a.value;
+                                return (
+                                    <div key={a.id} className="p-5 bg-zinc-900/40 gold-border rounded-2xl flex justify-between items-center group">
+                                        <div className="flex-1 cursor-pointer" onClick={() => startEditing(a)}>
+                                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">{a.type}</p>
+                                            <h3 className="text-lg text-white font-medium">{a.name}</h3>
+                                            <div className="flex flex-wrap gap-x-3 text-[10px] text-gray-500 font-mono">
+                                                {a.type === AssetType.GOLD && <span>重量: {a.weight}g</span>}
+                                                {a.interestRate && <span>利率: {a.interestRate}%</span>}
+                                                {a.maturityDate && <span>到期: {a.maturityDate}</span>}
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xl font-bold gold-text">{fmt(displayValue)}</p>
+                                            <button onClick={() => onDelete(a.id)} className="text-gray-700 hover:text-red-500 mt-2 transition-colors">
+                                                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-xl font-bold gold-text">{fmt(a.value)}</p>
-                                        <button onClick={() => onDelete(a.id)} className="text-gray-700 hover:text-red-500 mt-2 transition-colors">
-                                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
 
-                    {showAdd && (
-                        <div className="fixed inset-0 z-[100] bg-black/95 p-6 flex items-center justify-center">
-                            <form className="w-full max-w-sm space-y-5" onSubmit={e => {
+                    {(showAdd || editingAsset) && (
+                        <div className="fixed inset-0 z-[100] bg-black/95 p-6 flex items-center justify-center overflow-y-auto">
+                            <form className="w-full max-w-sm space-y-5 my-10" onSubmit={e => {
                                 e.preventDefault();
-                                onAdd({ name, value: parseFloat(val), type });
-                                setShowAdd(false); setName(''); setVal('');
+                                if (editingAsset) {
+                                    handleUpdateSubmit(e);
+                                } else {
+                                    onAdd({ 
+                                        name, 
+                                        type, 
+                                        value: type === AssetType.GOLD ? (parseFloat(weight) * goldPrice) : parseFloat(val),
+                                        weight: type === AssetType.GOLD ? parseFloat(weight) : undefined,
+                                        interestRate: (type === AssetType.US_BONDS || type === AssetType.SAVINGS) ? parseFloat(rate) : undefined,
+                                        maturityDate: (type === AssetType.US_BONDS || type === AssetType.SAVINGS) ? maturity : undefined
+                                    });
+                                    setShowAdd(false); setName(''); setVal(''); setWeight(''); setRate(''); setMaturity('');
+                                }
                             }}>
-                                <div className="flex justify-between items-center"><h2 className="text-2xl gold-text font-black uppercase">部署新資產</h2><button type="button" onClick={() => setShowAdd(false)} className="text-gray-500 text-2xl">&times;</button></div>
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-2xl gold-text font-black uppercase">{editingAsset ? '修改資產' : '部署新資產'}</h2>
+                                    <button type="button" onClick={() => { setShowAdd(false); setEditingAsset(null); }} className="text-gray-500 text-2xl">&times;</button>
+                                </div>
+                                
                                 <div className="space-y-4">
-                                    <input required type="text" value={name} onChange={e => setName(e.target.value)} placeholder="資產名稱" className="w-full bg-zinc-900 gold-border p-4 rounded-xl text-white gold-border-focus" />
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {Object.values(AssetType).map(t => (
-                                            <button key={t} type="button" onClick={() => setType(t)} className={`py-2 text-[10px] rounded-lg border transition-all ${type === t ? 'gold-gradient text-black font-bold' : 'bg-zinc-900 text-gray-500 border-zinc-800'}`}>{t}</button>
-                                        ))}
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">資產名稱</label>
+                                        <input required type="text" value={name} onChange={e => setName(e.target.value)} placeholder="名稱" className="w-full bg-zinc-900 gold-border p-4 rounded-xl text-white gold-border-focus" />
                                     </div>
-                                    <input required type="number" value={val} onChange={e => setVal(e.target.value)} placeholder="金額 (HKD)" className="w-full bg-zinc-900 gold-border p-4 rounded-xl text-white gold-border-focus" />
-                                </div>
-                                <button type="submit" className="w-full py-5 gold-gradient rounded-2xl text-black font-black uppercase tracking-widest shadow-2xl">確認部署</button>
-                            </form>
-                        </div>
-                    )}
+                                    
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">類別</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {Object.values(AssetType).map(t => (
+                                                <button key={t} type="button" onClick={() => setType(t)} className={`py-2 text-[10px] rounded-lg border transition-all ${type === t ? 'gold-gradient text-black font-bold' : 'bg-zinc-900 text-gray-500 border-zinc-800'}`}>{t}</button>
+                                            ))}
+                                        </div>
+                                    </div>
 
-                    {editingId && (
-                        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-6">
-                            <div className="w-full max-w-sm bg-zinc-900 gold-border p-8 rounded-3xl">
-                                <h2 className="text-xl gold-text font-black mb-6 uppercase text-center">調整戰力 (金額)</h2>
-                                <input autoFocus type="number" value={editVal} onChange={e => setEditVal(e.target.value)} className="w-full bg-black border-b gold-border py-4 text-3xl text-center text-white gold-border-focus mb-8" />
-                                <div className="flex gap-4">
-                                    <button onClick={() => setEditingId(null)} className="flex-1 py-4 bg-zinc-800 rounded-xl text-gray-400 font-bold uppercase text-xs">取消</button>
-                                    <button onClick={() => { onUpdate(editingId, parseFloat(editVal) || 0); setEditingId(null); }} className="flex-1 py-4 gold-gradient rounded-xl text-black font-black uppercase text-xs">確認</button>
+                                    {type === AssetType.GOLD ? (
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">重量 (克/g)</label>
+                                            <input required type="number" step="0.01" value={weight} onChange={e => setWeight(e.target.value)} placeholder="重量" className="w-full bg-zinc-900 gold-border p-4 rounded-xl text-xl text-white gold-border-focus" />
+                                            <p className="text-[10px] text-gray-600 mt-1 italic">價值將按實時金價 HKD {Math.round(goldPrice)}/g 自動計算</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">金額 (HKD)</label>
+                                            <input required type="number" value={val} onChange={e => setVal(e.target.value)} placeholder="金額" className="w-full bg-zinc-900 gold-border p-4 rounded-xl text-xl text-white gold-border-focus" />
+                                        </div>
+                                    )}
+
+                                    {(type === AssetType.US_BONDS || type === AssetType.SAVINGS) && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">利率 (%)</label>
+                                                <input type="number" step="0.01" value={rate} onChange={e => setRate(e.target.value)} placeholder="4.5" className="w-full bg-zinc-900 gold-border p-4 rounded-xl text-white gold-border-focus" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">到期日</label>
+                                                <input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} className="w-full bg-zinc-900 gold-border p-4 rounded-xl text-white gold-border-focus" />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                                <button type="submit" className="w-full py-5 gold-gradient rounded-2xl text-black font-black uppercase tracking-widest shadow-2xl">{editingAsset ? '確認修改' : '確認部署'}</button>
+                            </form>
                         </div>
                     )}
                 </div>
@@ -282,9 +350,9 @@
                         <input type="number" value={goal} onChange={e => onUpdateGoal(parseFloat(e.target.value) || 0)} className="w-full bg-zinc-900/50 gold-border p-5 rounded-2xl text-2xl font-bold text-white gold-border-focus" />
                     </div>
                     <div className="p-6 bg-zinc-900/20 border border-zinc-800 rounded-2xl text-xs space-y-3">
-                        <div className="flex justify-between"><span className="text-gray-500">當前版本</span><span className="text-gray-300">v4.0 Final Edition</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">當前版本</span><span className="text-gray-300">v5.0 Asset Enhanced</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">數據結算</span><span className="gold-text font-bold uppercase">HKD</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">資料安全</span><span className="text-gray-300">LocalStorage 已同步</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">金價來源</span><span className="text-gray-300 italic">模擬實時 API</span></div>
                     </div>
                 </section>
             </div>
@@ -294,22 +362,49 @@
         const App = () => {
             const [view, setView] = useState('home');
             const [data, setData] = useState(() => {
-                const saved = localStorage.getItem('ceo_master_data_v4');
+                const saved = localStorage.getItem('ceo_master_data_v5');
                 return saved ? JSON.parse(saved) : { assets: [], expenses: [], annualGoal: 1000000, userName: '顧北辰' };
             });
             const [quote, setQuote] = useState(CEO_QUOTES[0]);
+            const [goldPrice, setGoldPrice] = useState(660); // Default HKD/g
 
-            useEffect(() => { localStorage.setItem('ceo_master_data_v4', JSON.stringify(data)); }, [data]);
+            // 模擬金價抓取
+            useEffect(() => {
+                const fetchGold = async () => {
+                    try {
+                        // 這裡可以使用實時 API 如 GoldAPI.io 或其他公開源
+                        // 為了演示，我們模擬一個波動金價 (約 650-680 HKD/g)
+                        const mockPrice = 650 + Math.random() * 30;
+                        setGoldPrice(mockPrice);
+                    } catch (e) {
+                        console.error("Gold price fetch failed", e);
+                    }
+                };
+                fetchGold();
+                const timer = setInterval(fetchGold, 60000); // 每一分鐘更新一次
+                return () => clearInterval(timer);
+            }, []);
+
+            useEffect(() => { localStorage.setItem('ceo_master_data_v5', JSON.stringify(data)); }, [data]);
             useEffect(() => { if (view === 'home') setQuote(CEO_QUOTES[Math.floor(Math.random() * CEO_QUOTES.length)]); }, [view]);
 
-            const totalAssets = useMemo(() => data.assets.reduce((s, a) => s + a.value, 0), [data.assets]);
+            const totalAssets = useMemo(() => {
+                return data.assets.reduce((sum, a) => {
+                    const val = a.type === AssetType.GOLD ? (a.weight * goldPrice) : a.value;
+                    return sum + val;
+                }, 0);
+            }, [data.assets, goldPrice]);
+
             const totalAnnualExpenses = useMemo(() => {
                 const year = new Date().getFullYear().toString();
                 return data.expenses.filter(e => e.date.startsWith(year)).reduce((s, e) => s + e.amount, 0);
             }, [data.expenses]);
 
             const handleAddAsset = (a) => setData(prev => ({ ...prev, assets: [...prev.assets, { ...a, id: Date.now().toString() }] }));
-            const handleUpdateAsset = (id, val) => setData(prev => ({ ...prev, assets: prev.assets.map(a => a.id === id ? { ...a, value: val } : a) }));
+            const handleUpdateAsset = (id, updateData) => setData(prev => ({ 
+                ...prev, 
+                assets: prev.assets.map(a => a.id === id ? { ...a, ...updateData } : a) 
+            }));
             const handleDeleteAsset = (id) => setData(prev => ({ ...prev, assets: prev.assets.filter(a => a.id !== id) }));
             const handleAddExpense = (e) => setData(prev => ({ ...prev, expenses: [{ ...e, id: Date.now().toString() }, ...prev.expenses] }));
             const handleDeleteExpense = (id) => setData(prev => ({ ...prev, expenses: prev.expenses.filter(e => e.id !== id) }));
@@ -317,8 +412,8 @@
             return (
                 <div className="min-h-screen pb-24 flex flex-col max-w-md mx-auto relative border-x border-zinc-900 bg-black">
                     <main className="flex-1 overflow-y-auto px-6 pt-8 no-scrollbar">
-                        {view === 'home' && <Home quote={quote} totalAssets={totalAssets} totalAnnualExpenses={totalAnnualExpenses} goal={data.annualGoal} userName={data.userName} />}
-                        {view === 'assets' && <Assets assets={data.assets} onAdd={handleAddAsset} onUpdate={handleUpdateAsset} onDelete={handleDeleteAsset} />}
+                        {view === 'home' && <Home quote={quote} totalAssets={totalAssets} totalAnnualExpenses={totalAnnualExpenses} goal={data.annualGoal} userName={data.userName} goldPrice={goldPrice} />}
+                        {view === 'assets' && <Assets assets={data.assets} onAdd={handleAddAsset} onUpdate={handleUpdateAsset} onDelete={handleDeleteAsset} goldPrice={goldPrice} />}
                         {view === 'expenses' && <Expenses expenses={data.expenses} onAdd={handleAddExpense} onDelete={handleDeleteExpense} />}
                         {view === 'settings' && <Settings goal={data.annualGoal} userName={data.userName} onUpdateGoal={g => setData(d => ({...d, annualGoal: g}))} onUpdateName={n => setData(d => ({...d, userName: n}))} />}
                     </main>
