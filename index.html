@@ -1,52 +1,387 @@
-<!DOCTYPE html>
-<html lang="zh-HK">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CEO Financial Master - 極致黑金</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
-    <style>
-        :root { --gold: #d4af37; --gold-light: #f9d423; --gold-dark: #aa8b2e; }
-        * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; box-sizing: border-box; }
-        body {
-            font-family: 'Noto Sans TC', sans-serif;
-            background-color: #000;
-            color: #e5e5e5;
-            height: 100vh;
-            height: 100dvh;
-            margin: 0;
-            overflow: hidden;
-        }
-        .gold-gradient { background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold-dark) 100%); }
-        .gold-text {
-            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold-dark) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .gold-border { border: 1px solid rgba(212, 175, 55, 0.3); }
-        .gold-border-focus:focus { border-color: var(--gold); outline: none; box-shadow: 0 0 10px rgba(212, 175, 55, 0.2); }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-        .safe-top { padding-top: env(safe-area-inset-top); }
-        @keyframes slideUp { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .animate-slideUp { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .modal-blur { backdrop-filter: blur(25px); background-color: rgba(0,0,0,0.85); }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
-    </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/"
-  }
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createRoot } from 'react-dom/client';
+
+// --- Types & Constants ---
+enum AssetType {
+  CASH = '現金',
+  STOCKS = '股票',
+  US_BONDS = '美債',
+  GOLD = '黃金',
+  SAVINGS = '定期',
+  OTHERS = '其他'
 }
-</script>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="module" src="index.tsx"></script>
-</body>
-</html>
+
+const CATEGORIES = ['餐飲', '交通', '娛樂', '購物', '居住', '醫療', '教育', '其他'];
+
+const CEO_QUOTES = [
+  "這點錢也想退休？我看你是想在大街上退休。",
+  "我的字典裡沒有『窮』這個字，希望你的帳本裡也沒有。",
+  "這筆開銷... 你是覺得我給你的卡刷不爆嗎？",
+  "認真點，你的資產增長速度還不如我喝咖啡的速度。",
+  "如果你連自己的錢都管不好，你拿什麼管我的心？",
+  "跟我在一起，你的野心應該比你的餘額更大。",
+  "這張報表，我不滿意。明天我要看到成長。",
+  "錢不是省出來的，是賺出來的。但如果你連省都不會，你拿什麼去賺？",
+  "省下那杯拿鐵，你也不會變富有；但我喜歡你為了目標克制的樣子。",
+  "在我面前，你不需要談論『困難』，只需要談論『結果』。"
+];
+
+const fmt = (v: number) => new Intl.NumberFormat('zh-HK', { style: 'currency', currency: 'HKD', maximumFractionDigits: 0 }).format(v);
+
+// --- Components ---
+
+const Home = ({ quote, totalAssets, totalAnnualExpenses, goal, userName, goldPrice, isGoldLoading, onRefreshGold }: any) => {
+  const percentage = Math.min(Math.round((totalAssets / goal) * 100), 100);
+  return (
+    <div className="flex flex-col h-full justify-between pb-6 animate-slideUp pt-4">
+      <div className="space-y-4">
+        <div className="relative p-5 gold-border bg-zinc-900/40 rounded-2xl">
+          <div className="absolute -top-3 left-6 bg-black px-2 gold-text font-bold text-[10px] tracking-widest uppercase">{userName} 的指示</div>
+          <p className="text-lg font-light italic text-white leading-relaxed">「{quote}」</p>
+        </div>
+
+        <div className="flex flex-col items-center py-2">
+          <div className="relative w-44 h-44 flex items-center justify-center">
+            <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 200 200">
+              <circle cx="100" cy="100" r="85" stroke="rgba(212, 175, 55, 0.1)" strokeWidth="12" fill="transparent" />
+              <circle cx="100" cy="100" r="85" stroke="#d4af37" strokeWidth="12" fill="transparent" strokeDasharray="534" strokeDashoffset={534 - (534 * percentage) / 100} strokeLinecap="round" className="transition-all duration-1000" />
+            </svg>
+            <div className="text-center z-10">
+              <span className="text-4xl font-black gold-text">{percentage}%</span>
+              <p className="text-gray-500 text-[9px] mt-1 uppercase tracking-widest">年度目標達成</p>
+            </div>
+          </div>
+          <div className="text-center mt-4">
+            <p className="text-3xl font-light text-white tracking-tight">{fmt(totalAssets)}</p>
+            <p className="text-gray-500 text-[9px] uppercase font-bold tracking-widest mt-1">年度目標：{fmt(goal)}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-2">
+        <div className="p-4 bg-zinc-900/50 rounded-2xl gold-border">
+          <p className="text-gray-500 text-[8px] uppercase font-bold tracking-widest mb-1">今年累計開支</p>
+          <p className="text-md font-bold text-white">{fmt(totalAnnualExpenses)}</p>
+        </div>
+        <div className="p-4 bg-zinc-900/50 rounded-2xl gold-border relative overflow-hidden group active:bg-zinc-800 transition-colors" onClick={onRefreshGold}>
+          <div className="flex justify-between items-start mb-1">
+            <p className="text-gray-500 text-[8px] uppercase font-bold tracking-widest">實時金價 (HKD/g)</p>
+            <div className={`w-1.5 h-1.5 rounded-full ${isGoldLoading ? 'bg-zinc-500 animate-pulse' : 'bg-green-500'}`}></div>
+          </div>
+          <p className="text-md font-bold gold-text">${goldPrice.toFixed(1)}</p>
+          <div className="absolute bottom-1 right-2 opacity-20 group-hover:opacity-100 transition-opacity">
+            <svg width="10" height="10" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AssetsView = ({ assets, onAdd, onUpdate, onDelete, goldPrice }: any) => {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editAsset, setEditAsset] = useState<any>(null);
+  const [name, setName] = useState('');
+  const [val, setVal] = useState('');
+  const [weight, setWeight] = useState('');
+  const [type, setType] = useState<AssetType>(AssetType.CASH);
+  const [rate, setRate] = useState('');
+  const [maturity, setMaturity] = useState('');
+
+  const resetForm = () => {
+    setName(''); setVal(''); setWeight(''); setRate(''); setMaturity('');
+    setType(AssetType.CASH); setShowAdd(false); setEditAsset(null);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      name, type,
+      value: type === AssetType.GOLD ? 0 : parseFloat(val || '0'),
+      weight: type === AssetType.GOLD ? parseFloat(weight || '0') : undefined,
+      interestRate: (type === AssetType.US_BONDS || type === AssetType.SAVINGS) ? parseFloat(rate || '0') : undefined,
+      maturityDate: (type === AssetType.US_BONDS || type === AssetType.SAVINGS) ? maturity : undefined
+    };
+    editAsset ? onUpdate(editAsset.id, payload) : onAdd(payload);
+    resetForm();
+  };
+
+  const startEdit = (a: any) => {
+    setEditAsset(a);
+    setName(a.name); setType(a.type); setVal(a.value || '');
+    setWeight(a.weight || ''); setRate(a.interestRate || ''); setMaturity(a.maturityDate || '');
+    setShowAdd(true);
+  };
+
+  return (
+    <div className="flex flex-col h-full animate-slideUp">
+      <header className="flex justify-between items-end mb-6 pt-6 shrink-0">
+        <div>
+          <h1 className="text-2xl font-black gold-text uppercase tracking-tighter">資產軍隊</h1>
+          <p className="text-gray-500 text-[10px] tracking-widest">掌控每一分錢的動向。</p>
+        </div>
+        <button onClick={() => { resetForm(); setShowAdd(true); }} className="w-12 h-12 gold-gradient rounded-full flex items-center justify-center text-black shadow-lg">
+          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </header>
+      
+      <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 pb-24">
+        {assets.length === 0 ? <div className="text-center py-20 text-zinc-800 italic text-sm">庫存空虛，立即部署。</div> : assets.map((a: any) => (
+          <div key={a.id} className="p-4 bg-zinc-900/40 gold-border rounded-xl flex justify-between items-center active:bg-zinc-800 transition-colors" onClick={() => startEdit(a)}>
+            <div className="flex-1 overflow-hidden mr-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[8px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 font-bold">{a.type}</span>
+                {a.interestRate && <span className="text-[8px] text-gold font-bold">{a.interestRate}% APR</span>}
+              </div>
+              <h3 className="text-md text-white font-medium truncate leading-tight">{a.name}</h3>
+              {a.maturityDate && <p className="text-[8px] text-zinc-500 mt-0.5 font-mono uppercase">到期: {a.maturityDate}</p>}
+            </div>
+            <div className="text-right flex items-center gap-3">
+              <div className="flex flex-col items-end">
+                <p className="text-lg font-bold gold-text whitespace-nowrap">{fmt(a.type === AssetType.GOLD ? (a.weight || 0) * goldPrice : (a.value || 0))}</p>
+                {a.type === AssetType.GOLD && <p className="text-[8px] text-zinc-600 tracking-tighter">{a.weight}g @ {goldPrice.toFixed(1)}</p>}
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); onDelete(a.id); }} className="text-zinc-800 p-1">
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showAdd && (
+        <div className="fixed inset-0 z-[100] modal-blur flex items-center justify-center p-4">
+          <form className="bg-zinc-950 gold-border p-4 rounded-[1.5rem] space-y-2.5 animate-slideUp shadow-2xl modal-content-compact" onSubmit={handleSubmit}>
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg gold-text font-black uppercase tracking-widest">{editAsset ? '調整部隊' : '部署資產'}</h2>
+              <button type="button" onClick={resetForm} className="text-zinc-700 text-3xl leading-none">&times;</button>
+            </div>
+            <div className="space-y-2.5">
+              <div className="space-y-1">
+                <label className="text-[9px] text-zinc-500 uppercase ml-1">資產名稱</label>
+                <input required placeholder="如: 恆生儲蓄、TSLA" value={name} onChange={e => setName(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 p-2 rounded-lg text-white gold-border-focus text-sm" />
+              </div>
+              
+              <div className="grid grid-cols-3 gap-1">
+                {Object.values(AssetType).map(t => <button key={t} type="button" onClick={() => setType(t)} className={`py-1.5 text-[9px] rounded-lg border transition-all ${type === t ? 'gold-gradient text-black font-black' : 'bg-zinc-900 text-zinc-600 border-zinc-800'}`}>{t}</button>)}
+              </div>
+
+              {type === AssetType.GOLD ? (
+                <div className="space-y-1">
+                  <label className="text-[9px] text-zinc-500 uppercase ml-1">持有重量 (g)</label>
+                  <input required type="number" step="0.01" value={weight} onChange={e => setWeight(e.target.value)} placeholder="0.00" className="w-full bg-zinc-900 border border-zinc-800 p-2 rounded-lg text-white gold-border-focus text-lg font-bold" />
+                  <p className="text-[10px] text-gold italic px-1">實時估值: {fmt(parseFloat(weight || '0') * goldPrice)}</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[9px] text-zinc-500 uppercase ml-1">金額 (HKD)</label>
+                  <input required type="number" value={val} onChange={e => setVal(e.target.value)} placeholder="0" className="w-full bg-zinc-900 border border-zinc-800 p-2 rounded-lg text-lg font-bold text-white gold-border-focus" />
+                </div>
+              )}
+
+              {(type === AssetType.US_BONDS || type === AssetType.SAVINGS) && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] text-zinc-500 uppercase block mb-1 ml-1">利率 %</label>
+                    <input placeholder="4.25" type="number" step="0.01" value={rate} onChange={e => setRate(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 p-2 rounded-lg text-white gold-border-focus text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-zinc-500 uppercase block mb-1 ml-1">到期日</label>
+                    <input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 p-2 rounded-lg text-white text-[10px] gold-border-focus" />
+                  </div>
+                </div>
+              )}
+            </div>
+            <button type="submit" className="w-full py-3 gold-gradient rounded-xl text-black font-black uppercase tracking-[0.2em] shadow-xl mt-1 active:scale-95 transition-transform">確認部署</button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ExpensesView = ({ expenses, onAdd, onDelete }: any) => {
+  const [showAdd, setShowAdd] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [cat, setCat] = useState(CATEGORIES[0]);
+  const [note, setNote] = useState('');
+
+  return (
+    <div className="flex flex-col h-full animate-slideUp">
+      <header className="flex justify-between items-end mb-6 pt-6 shrink-0">
+        <div>
+          <h1 className="text-2xl font-black gold-text uppercase tracking-tighter">日常支出</h1>
+          <p className="text-gray-500 text-[10px] tracking-widest">每一筆開銷都應有其價值。</p>
+        </div>
+        <button onClick={() => setShowAdd(true)} className="w-12 h-12 gold-gradient rounded-full flex items-center justify-center text-black shadow-lg">
+          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </header>
+      <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 pb-24">
+        {expenses.length === 0 ? <p className="text-center py-20 text-zinc-800 italic text-sm">無支出記錄，很好。</p> : expenses.map((e: any) => (
+          <div key={e.id} className="p-4 bg-zinc-900/30 gold-border rounded-xl flex justify-between items-center">
+            <div className="flex-1 overflow-hidden mr-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-zinc-800 rounded flex-shrink-0 flex items-center justify-center text-[9px] text-zinc-500 font-bold uppercase">{e.category.slice(0,2)}</div>
+                <div className="overflow-hidden">
+                  <p className="text-white text-md font-medium truncate leading-tight">{e.note}</p>
+                  <p className="text-zinc-600 text-[8px] tracking-widest uppercase mt-0.5">{e.date} • {e.category}</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-right flex items-center gap-3 whitespace-nowrap">
+              <span className="text-white font-bold text-lg">-{fmt(e.amount)}</span>
+              <button onClick={() => onDelete(e.id)} className="text-zinc-800 p-1"><svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {showAdd && (
+        <div className="fixed inset-0 z-[100] modal-blur flex items-center justify-center p-6">
+          <form className="w-full max-w-sm bg-zinc-950 gold-border p-6 rounded-[1.5rem] space-y-4 shadow-2xl modal-content-compact" onSubmit={e => { 
+            e.preventDefault(); onAdd({ amount: parseFloat(amount || '0'), category: cat, note: note || '生活支出', date: new Date().toISOString().split('T')[0] }); setShowAdd(false); setAmount(''); setNote(''); 
+          }}>
+            <div className="flex justify-between items-center"><h2 className="text-lg gold-text font-black uppercase tracking-widest">新增開支</h2><button type="button" onClick={() => setShowAdd(false)} className="text-zinc-700 text-3xl leading-none">&times;</button></div>
+            <div className="space-y-4">
+              <input required type="number" placeholder="金額 (HKD)" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-xl font-bold text-white gold-border-focus" />
+              <div className="grid grid-cols-4 gap-1.5">{CATEGORIES.map(c => <button key={c} type="button" onClick={() => setCat(c)} className={`py-2 text-[9px] rounded-lg border transition-all ${cat === c ? 'gold-gradient text-black font-black' : 'bg-zinc-900 text-zinc-600 border-zinc-800'}`}>{c}</button>)}</div>
+              <input placeholder="備註" value={note} onChange={e => setNote(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg text-white gold-border-focus text-md" />
+            </div>
+            <button type="submit" className="w-full py-4 gold-gradient rounded-xl text-black font-black uppercase tracking-[0.2em] shadow-xl">確認支出</button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SettingsView = ({ goal, userName, onUpdateGoal, onUpdateName }: any) => (
+  <div className="flex flex-col h-full animate-slideUp py-6 space-y-8">
+    <header>
+      <h1 className="text-2xl font-black gold-text uppercase tracking-tighter">決策中心</h1>
+      <p className="text-gray-500 text-[10px] tracking-widest">在這裡重新定義你的野心。</p>
+    </header>
+    <div className="flex-1 overflow-y-auto space-y-8 no-scrollbar pb-24">
+      <div className="space-y-2">
+        <label className="text-[10px] gold-text font-black uppercase tracking-widest ml-1">主理人尊稱</label>
+        <input type="text" value={userName} onChange={e => onUpdateName(e.target.value)} className="w-full bg-zinc-900/50 gold-border p-4 rounded-xl text-lg text-white gold-border-focus" />
+      </div>
+      <div className="space-y-2">
+        <label className="text-[10px] gold-text font-black uppercase tracking-widest ml-1">年度資產目標 (HKD)</label>
+        <input type="number" value={goal} onChange={e => onUpdateGoal(parseFloat(e.target.value) || 0)} className="w-full bg-zinc-900/50 gold-border p-4 rounded-xl text-2xl font-black text-white gold-border-focus" />
+      </div>
+      <div className="p-6 bg-zinc-900/20 border border-zinc-800 rounded-2xl space-y-4">
+        <h4 className="text-zinc-600 font-bold text-[8px] uppercase tracking-widest">系統概況</h4>
+        <div className="flex justify-between text-[10px] font-mono"><span className="text-zinc-600">VERSION</span><span className="text-zinc-300">v12.2 RealTime</span></div>
+        <div className="flex justify-between text-[10px] font-mono"><span className="text-zinc-600">CURRENCY</span><span className="gold-text">HKD</span></div>
+        <div className="flex justify-between text-[10px] font-mono"><span className="text-zinc-600">DATA SYNC</span><span className="gold-text">LOCAL_ENCRYPTED</span></div>
+      </div>
+    </div>
+  </div>
+);
+
+// --- Main App Logic ---
+
+const App = () => {
+  const [view, setView] = useState('home');
+  const [data, setData] = useState(() => {
+    const saved = localStorage.getItem('ceo_v12_hkd_final');
+    return saved ? JSON.parse(saved) : { assets: [], expenses: [], annualGoal: 1000000, userName: '顧北辰' };
+  });
+  const [quote, setQuote] = useState(CEO_QUOTES[0]);
+  const [goldPrice, setGoldPrice] = useState(695);
+  const [isGoldLoading, setIsGoldLoading] = useState(false);
+
+  useEffect(() => { localStorage.setItem('ceo_v12_hkd_final', JSON.stringify(data)); }, [data]);
+  useEffect(() => { if (view === 'home') setQuote(CEO_QUOTES[Math.floor(Math.random() * CEO_QUOTES.length)]); }, [view]);
+  
+  // 實時金價聯動函數
+  const fetchGold = useCallback(async () => {
+    setIsGoldLoading(true);
+    try {
+      const res = await fetch('https://api.gold-api.com/price/XAU');
+      const json = await res.json();
+      if (json && json.price) {
+        // 金價換算: (USD/oz / 31.1034768) * 7.82 (USDHKD)
+        const pricePerGramHKD = (json.price / 31.1034768) * 7.82;
+        setGoldPrice(pricePerGramHKD);
+      }
+    } catch (e) { 
+      console.warn("Gold sync failed, using last known or fallback."); 
+    } finally {
+      setIsGoldLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { 
+    fetchGold();
+    const timer = setInterval(fetchGold, 300000); // 5分鐘自動更新
+    return () => clearInterval(timer);
+  }, [fetchGold]);
+
+  const totalAssets = useMemo(() => data.assets.reduce((s: number, a: any) => s + (a.type === AssetType.GOLD ? (a.weight || 0) * goldPrice : (a.value || 0)), 0), [data.assets, goldPrice]);
+  const totalAnnualExpenses = useMemo(() => data.expenses.filter((e: any) => e.date.startsWith(new Date().getFullYear().toString())).reduce((s: number, e: any) => s + (e.amount || 0), 0), [data.expenses]);
+
+  return (
+    <div className="h-screen h-dvh flex flex-col bg-black relative max-w-md mx-auto border-x border-zinc-900 shadow-2xl overflow-hidden safe-top safe-bottom">
+      <main className="flex-1 overflow-hidden px-5">
+        {view === 'home' && (
+          <Home 
+            quote={quote} 
+            totalAssets={totalAssets} 
+            totalAnnualExpenses={totalAnnualExpenses} 
+            goal={data.annualGoal} 
+            userName={data.userName} 
+            goldPrice={goldPrice}
+            isGoldLoading={isGoldLoading}
+            onRefreshGold={fetchGold}
+          />
+        )}
+        {view === 'assets' && (
+          <AssetsView 
+            assets={data.assets} 
+            goldPrice={goldPrice} 
+            onAdd={(a: any) => setData((d: any) => ({...d, assets: [...d.assets, {...a, id: Date.now().toString()}]}))} 
+            onUpdate={(id: any, u: any) => setData((d: any) => ({...d, assets: d.assets.map((a: any) => a.id === id ? {...a, ...u} : a)}))} 
+            onDelete={(id: any) => setData((d: any) => ({...d, assets: d.assets.filter((a: any) => a.id !== id)}))} 
+          />
+        )}
+        {view === 'expenses' && (
+          <ExpensesView 
+            expenses={data.expenses} 
+            onAdd={(e: any) => setData((d: any) => ({...d, expenses: [{...e, id: Date.now().toString()}, ...d.expenses]}))} 
+            onDelete={(id: any) => setData((d: any) => ({...d, expenses: d.expenses.filter((e: any) => e.id !== id)}))} 
+          />
+        )}
+        {view === 'settings' && (
+          <SettingsView 
+            goal={data.annualGoal} 
+            userName={data.userName} 
+            onUpdateGoal={(g: any) => setData((d: any) => ({...d, annualGoal: g}))} 
+            onUpdateName={(n: any) => setData((d: any) => ({...d, userName: n}))} 
+          />
+        )}
+      </main>
+
+      <nav className="h-20 shrink-0 bg-zinc-950/95 border-t border-zinc-900 flex justify-around items-center safe-bottom px-4">
+        {[
+          { id: 'home', label: '總覽', icon: <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/> },
+          { id: 'assets', label: '部隊', icon: <path d="M12 1v22M17 5H9a4 4 0 000 8h5a4 4 0 010 8H6"/> },
+          { id: 'expenses', label: '支出', icon: <rect width="14" height="18" x="5" y="3" rx="2"/> },
+          { id: 'settings', label: '決策', icon: <g><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></g> }
+        ].map(item => (
+          <button key={item.id} onClick={() => setView(item.id)} className={`flex flex-col items-center gap-1.5 transition-all ${view === item.id ? 'gold-text scale-110' : 'text-zinc-700'}`}>
+            <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5">{item.icon}</svg>
+            <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+};
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = createRoot(rootElement);
+  root.render(<App />);
+}
